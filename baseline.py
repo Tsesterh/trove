@@ -8,22 +8,35 @@ from utils import *
 from torch.utils.data import Dataset
 from mako.template import Template
 from transformers import AutoTokenizer
+from tqdm import tqdm
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+#set cuda visible devices to 2 and 3
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+
 
 def main():
-    # load data
+    print("Starting the program")
+    
+    # Load data
+    print("Loading dataset...")
     examples = load_dataset(args.task_name, args.max_num_examples)
     template_path = os.path.join("prompt", args.task_name, "primitive.md")
     template = Template(filename=template_path)
 
     if '/' in args.task_name:
+        print("Splitting task name for special format")
         args.task_name = args.task_name.split('/')[0]
+        
+    print("Loading toolbox...")
     library = load_toolbox(os.path.join("toolbox", f"{args.task_name}.py"))
     library_preview = format_toolbox(library)
 
+    print("Initializing tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    
+    print("Preparing dataset...")
     class TempDataset(Dataset):
         def __init__(self, examples: list[dict]):
             self.examples = examples
@@ -45,8 +58,10 @@ def main():
 
     dataset = TempDataset(examples)
     max_output_tokens = max(dataset.num_input_tokens) + args.max_new_tokens
+    print(f"Dataset prepared with max output tokens: {max_output_tokens}")
 
-    # config generation pipeline
+    # Config generation pipeline
+    print("Setting up generation pipeline...")
     pipeline = transformers.pipeline(
         "text-generation", model=args.model_name,
         torch_dtype=torch.float16, device_map="auto",
@@ -62,18 +77,21 @@ def main():
         "max_length": max_output_tokens,
     }
 
-    # batched inference
+    # Batched inference
+    print("Starting batched inference...")
     model_outputs = []
-    for batch_outputs in pipeline(
+    for batch_outputs in tqdm(pipeline(
         dataset, batch_size=args.batch_size, **stable_generate_args
-    ):
+    )):
         model_outputs.append(batch_outputs)
 
-    # execute, evaluate, and logging
+    # Execute, evaluate, and log
+    print("Executing and logging results...")
     fw_log = open(args.output_log_path, 'w')
     result_list = []
 
     for i in range(len(dataset)):
+        print(f"Processing example {i+1}...")
         write_prompt(fw_log, dataset.prompts[i], library_preview, i)
 
         response_list = []
@@ -85,7 +103,6 @@ def main():
             response_list.append(resp)
 
         for j, res in enumerate(response_list):
-            # collect code pieces
             code_pieces = []
             for _, func_dict in library.items():
                 code_pieces.append(func_dict["function"])
@@ -94,7 +111,6 @@ def main():
             code_pieces.append(unwrap_code(res["solution"]))
             code_pieces = clean_import(code_pieces)
 
-            # execute
             is_success, exec_output = execute_code_wrapped(
                 code_pieces=code_pieces,
                 exec_file=args.exec_file,
@@ -106,7 +122,7 @@ def main():
             elif "answers" in ex:
                 answer = ex["answers"]
             else:
-                raise ValueError(f"Invalid example w/o answers: {ex.keys()}")
+                raise ValueError(f"Invalid example without answers: {ex.keys()}")
 
             is_correct, model_answer = EVAL_FUNC[args.task_name](
                 is_success=is_success, model_output=exec_output,
@@ -120,7 +136,6 @@ def main():
                 "answer": answer,
             }
 
-            # update results, log, and toolbox
             response_list[j].update(exec_dict)
 
             write_exec_result(fw_log, exec_dict, index=j)
@@ -134,7 +149,7 @@ def main():
         fw_log.write(f"\n\n**Best Index: {best_index}**\n")
 
         if (i+1) % args.report_steps == 0:
-            print(f"Finished {i+1} examples.")
+            print(f"Finished processing {i+1} examples.")
 
     correct_list = [r["is_correct"] for r in result_list]
     test_acc = sum(correct_list) / len(correct_list)
@@ -149,6 +164,7 @@ def main():
     dump_json_file(result_list, args.output_results_path)
     print(f"Overall Accuracy: Test {test_acc:.2f}")
     print(f"Toolbox Size: #{len(library)}")
+
 
 
 
