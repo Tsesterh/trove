@@ -30,14 +30,19 @@ def write_exec_result(
     exec_dict: dict[str, bool | str | list[str]],
     index: int = 0,
 ):
+    model_answer = exec_dict['model_answers']
+    # Truncate model answer if it's a list with more than 20 elements #TOBI
+    if isinstance(model_answer, list) and len(model_answer) > 20:
+        model_answer = model_answer[:10] + ['... (truncated)']
+
     fw_log.write('\n'.join([
         f"**{index}-th Execution Result**",
         f"- Is Execution Success: {exec_dict['is_success']}",
-        f"- Model Output:",
-        "```", 
-        f"{exec_dict['exec_output']}"
-        "\n```",
-        f"- Model Answer: {exec_dict['model_answers']}",
+        #f"- Model Output:",
+        #"```", 
+        #f"{exec_dict['exec_output']}",
+        #"```",
+        f"- Model Answer: {model_answer}",
         f"- Annotated Answer(s): {exec_dict['answer']}",
         f"- Is Answer Correct: {exec_dict['is_correct']}",     
     ]) + '\n\n')
@@ -88,6 +93,10 @@ def auto_decide_path(
     )
     os.makedirs(log_dir, exist_ok=True)
 
+    import datetime
+    now = datetime.datetime.now()
+    args.run_index = int(now.strftime("%Y%m%d%H%M%S"))
+
     if args.run_index is None:
         log_path_list = [
             lp for lp in os.listdir(log_dir)
@@ -95,17 +104,29 @@ def auto_decide_path(
         ]
         if len(log_path_list) > 0:
             run_index_list = [lp[len("run"): -len(".md")] for lp in log_path_list]
-            run_index_list = [int(ri) for ri in run_index_list]
-            args.run_index = max(run_index_list) + 1
+            try:
+                run_index_list = [int(ri) for ri in run_index_list]
+                args.run_index = max(run_index_list) + 1
+            except:
+                # set run index to a number that correspondents to the date and time
+                import datetime
+                now = datetime.datetime.now()
+                args.run_index = int(now.strftime("%Y%m%d%H%M%S"))
         else:
-            args.run_index = 0
+            import datetime
+            now = datetime.datetime.now()
+            args.run_index = int(now.strftime("%Y%m%d%H%M%S"))
     updated_name = f"run{args.run_index}.json"
     args.output_results_path = os.path.join(results_dir, updated_name)
     print(f"Output Results Path: {args.output_results_path}")
 
     # logging
     if "log" in fields:
-        log_name = f"run{args.run_index}.md"
+        #get date
+        import datetime
+        now = datetime.datetime.now()
+        date = now.strftime("%Y-%m-%d-%H-%M-%S")
+        log_name = f"run{args.run_index}_{date}.md"
         args.output_log_path = os.path.join(log_dir, log_name)
         print(f"Log Path: {args.output_log_path}")
 

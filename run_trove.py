@@ -1,5 +1,5 @@
 """Online Function Induction and Program Solution Generation."""
-
+print("Importing Libraries...")
 import os
 import math
 import torch
@@ -9,9 +9,15 @@ import transformers
 from utils import *
 from mako.template import Template
 from transformers import AutoTokenizer
+from tqdm import tqdm
 
 
 def main():
+    #set random seeds
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    
+    print("Starting the program")
     # load dataset and prompt templates
     dataset = load_dataset(args.task_name, args.max_num_examples)
     if args.shuffle_seed is not None:
@@ -47,6 +53,13 @@ def main():
     }
     
     fw_log = open(args.output_log_path, 'w')
+    print("Logs are written to ", args.output_log_path)
+
+    #write all the parser arguments to the log file
+    fw_log.write("\n\n\n")
+    fw_log.write("Parser Arguments\n")
+    fw_log.write(str(args))
+    fw_log.write("\n\n\n")
 
     def get_example_responses(
         example: dict, index: int, template: Template, library: dict,
@@ -64,9 +77,17 @@ def main():
 
         # output
         max_tokens = len(tokenizer(prompt)["input_ids"]) + args.max_new_tokens
-        response_list = pipeline(
-            prompt, do_sample=True, max_length=max_tokens, **stable_gen_args
-        )
+        print("Getting responses for example:", index)
+        for _ in range(3): #TOBI I did this to avoid errors
+            try:
+                response_list = pipeline(
+                    prompt, do_sample=True, max_length=max_tokens, **stable_gen_args
+                )
+                break
+            except Exception as e:
+                pass
+                
+
         resp_dict_list = []
         for r in response_list:
             r = extract_llama_response(r["generated_text"], input_text=prompt)
@@ -191,8 +212,8 @@ def main():
     # start streaming examples
     result_list = []
     trimmed_indices = set()
-
-    for i, ex in enumerate(dataset):
+    print("Streaming examples...")
+    for i, ex in tqdm(enumerate(dataset)):
         # multi-channel (3-way) generation
         result_dict = multi_way_generation(
             example=ex, index=i,
@@ -215,27 +236,32 @@ def main():
     fw_log.write(f"Toolbox Size: #{len(library)}")
 
 
+
     # update solutions of examples missing tools
-    trimmed_indices = sorted(list(trimmed_indices))
-    print(f"Re-generate solutions for #{len(trimmed_indices)} examples.")
-    for i in trimmed_indices:
-        result_dict = multi_way_generation(dataset[i], i, ["import", "skip"])
-        result_list[i] = result_dict  # update result record
+    # ToDo: das ist bisschen sus -> auskommentieren
+    # trimmed_indices = sorted(list(trimmed_indices))
+    # print(f"Re-generate solutions for #{len(trimmed_indices)} examples.")
+    # for i in trimmed_indices:
+    #     result_dict = multi_way_generation(dataset[i], i, ["import", "skip"])
+    #     result_list[i] = result_dict  # update result record
 
-    correct_list = [r["response"]["is_correct"] for r in result_list]
-    acc = sum(correct_list) / len(correct_list)
-    print(f"Updated Response Accuracy: {acc:.2f}")
+    # correct_list = [r["response"]["is_correct"] for r in result_list]
+    # acc = sum(correct_list) / len(correct_list)
+    # print(f"Updated Response Accuracy: {acc:.2f}")
 
-    fw_log.write(f"\n## Overall Response Accuracy: {acc:.2f}\n")
-    fw_log.write(f"Toolbox Size: #{len(library)}")
-    for name, d in library.items():
-        fw_log.write(f"=== {name} ===\n")
-        fw_log.write(d["function"])
-        fw_log.write('\n\n\n')
-    fw_log.close()
+    # fw_log.write(f"\n## Overall Response Accuracy: {acc:.2f}\n")
+    # fw_log.write(f"Toolbox Size: #{len(library)}")
+    # for name, d in library.items():
+    #     fw_log.write(f"=== {name} ===\n")
+    #     fw_log.write(d["function"])
+    #     fw_log.write('\n\n\n')
+    # fw_log.close()
 
     dump_json_file(result_list, args.output_results_path)
     dump_toolbox(library, args.output_library_path)
+
+    print("Output Path was ", args.output_results_path)
+    print("We used all modes")
 
 
 
@@ -248,10 +274,13 @@ if __name__ == "__main__":
                             "math/algebra", "math/counting", "math/geometry",
                             "math/intermediate", "math/number",
                             "math/prealgebra", "math/precalculus",
-                            "tabmwp", "wtq", "hitab", "gqa"
+                            "tabmwp", "wtq", "hitab", "gqa", "math/algebra_new", "math/counting_new"
                         ],
                         help="Task name.")
     parser.add_argument("--shuffle_seed", type=int, default=None)
+
+    #seed
+    parser.add_argument("--seed", type=int, default=42)
     
     # experiment config
     parser.add_argument("--run_index", type=int, default=None)
@@ -259,7 +288,7 @@ if __name__ == "__main__":
     # example config
     parser.add_argument("--max_num_examples", type=int, default=None,
                         help="Maximum number of examples to generate.")
-    parser.add_argument("--trim_steps", type=int, default=500,
+    parser.add_argument("--trim_steps", type=int, default=200,
                         help="Trim library by threshold every N examples.")
 
     # execution config
@@ -272,9 +301,11 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, 
                         default="codellama/CodeLlama-7b-Instruct-hf")
     parser.add_argument("--top_p", type=float, default=0.95)
-    parser.add_argument("--num_return_sequences", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=0.3)
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--num_return_sequences", type=int, default=5)
+    parser.add_argument("--temperature", type=float, default=0.6)
+    parser.add_argument("--max_new_tokens", type=int, default=512)
+
+    
 
     args = parser.parse_args()
     args.suffix = "trove"

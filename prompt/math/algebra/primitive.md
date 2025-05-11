@@ -15,6 +15,10 @@ cost_70_miles = 70 * unit_cost
 print(cost_70_miles)
 ```
 
+% if similar_block:
+## Similar Questions (k=${len(similar_block.split('**Question**'))-1})
+${similar_block}
+% endif
 
 **Question**
 ${question}

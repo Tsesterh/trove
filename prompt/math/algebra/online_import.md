@@ -4,7 +4,7 @@ The toolbox section lists all the available functions that can be used in your s
 
 ## Example
 **Question**
-If $3p+4q=8$ and $4p+3q=13$, what is $q$ equal to?
+Solve for $a$: $\\dfrac{8^{-1}}{4^{-1}}-a^{-1}=1$.
 
 **Toolbox**
 ```python
@@ -18,12 +18,11 @@ from sympy import symbols, solve
 
 **Solution**
 ```python
-p, q = symbols('p q')
-eq1 = 3*p + 4*q - 8
-eq2 = 4*p + 3*q - 13
-solution = solve((eq1, eq2), (p, q))
-q_value = solution[q]
-print(q_value)
+a = symbols('a')
+eq = (8**(-1))/(4**(-1)) - a**(-1) - 1
+solution = solve(eq, a)
+a_value = solution[0]
+print(a_value)
 ```
 **Tools**
 ```python

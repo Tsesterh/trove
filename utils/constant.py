@@ -2,7 +2,9 @@
 
 DATA_PATH = {
     "math/algebra": "data/math/algebra.jsonl",
+    "math/algebra_new": "data/math/algebra.jsonl",
     "math/counting": "data/math/counting_and_probability.jsonl", 
+    "math/counting_new": "data/math/counting_and_probability.jsonl",
     "math/geometry": "data/math/geometry.jsonl",
     "math/intermediate": "data/math/intermediate_algebra.jsonl",
     "math/number": "data/math/number_theory.jsonl",

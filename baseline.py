@@ -1,5 +1,5 @@
 """Generate Programs with Primitives / Independent Function Induction."""
-
+print("Importing Libraries...")
 import os
 import torch
 import argparse
@@ -9,15 +9,21 @@ from torch.utils.data import Dataset
 from mako.template import Template
 from transformers import AutoTokenizer
 from tqdm import tqdm
+import random
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-#set cuda visible devices to 2 and 3
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+#set cuda visible devices to 2 and 3#
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def main():
     print("Starting the program")
+
+    #set args seed
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
     
     # Load data
     print("Loading dataset...")
@@ -88,6 +94,13 @@ def main():
     # Execute, evaluate, and log
     print("Executing and logging results...")
     fw_log = open(args.output_log_path, 'w')
+
+    #write all the parser arguments to the log file
+    fw_log.write("\n\n\n")
+    fw_log.write("Parser Arguments\n")
+    fw_log.write(str(args))
+    fw_log.write("\n\n\n")
+
     result_list = []
 
     for i in range(len(dataset)):
@@ -145,6 +158,10 @@ def main():
             )
 
         best_index = select_best_solution(response_list)
+
+        ## add to tuple of question and response -> Ich will eine Liste haben und dann über kNN immer zur Laufzeit die nächsten Nachbarn finden
+        ans_resp_tuple = (dataset.examples[i]["question"], response_list[best_index]["solution"])
+
         result_list.append(response_list[best_index])
         fw_log.write(f"\n\n**Best Index: {best_index}**\n")
 
@@ -183,6 +200,9 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, required=True,
                         choices=["primitive", "instance"])
     
+    # seed
+    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    
     # example config
     parser.add_argument("--run_index", type=int, default=None)
     parser.add_argument("--max_num_examples", type=int, default=None,
@@ -199,11 +219,11 @@ if __name__ == "__main__":
     # generation config
     parser.add_argument("--model_name", type=str,
                         default="codellama/CodeLlama-7b-Instruct-hf")
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--top_p", type=float, default=0.95)
-    parser.add_argument("--num_return_sequences", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=0.3)
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--num_return_sequences", type=int, default=15)
+    parser.add_argument("--temperature", type=float, default=0.6)
+    parser.add_argument("--batch_size", type=int, default=1)
 
     args = parser.parse_args()
     args = auto_decide_path(args, fields=["log"])
